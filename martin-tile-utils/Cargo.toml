@@ -18,7 +18,12 @@ homepage.workspace = true
 [dependencies]
 brotli.workspace = true
 flate2.workspace = true
+geo = "0.30.0"
+geojson = "0.24.2"
+mvt = "0.10.3"
+proj = "0.30.0"
 serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 approx.workspace = true

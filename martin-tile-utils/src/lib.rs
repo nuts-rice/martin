@@ -18,6 +18,10 @@ pub const MAX_ZOOM: u8 = 30;
 
 mod decoders;
 pub use decoders::*;
+mod geojson;
+pub use geojson::*;
+mod mvt;
+pub use mvt::*;
 mod rectangle;
 pub use rectangle::{TileRect, append_rect};
 
