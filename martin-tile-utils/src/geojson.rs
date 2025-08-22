@@ -1,14 +1,19 @@
-use geo::{Coord, CoordNum, Geometry};
 use geojson::{Geometry, Value};
 use std::f64::consts::PI;
+use std::ffi::OsStr;
+use std::path::Path;
 
+use crate::mvt::MvtBuilder;
 use crate::{EARTH_CIRCUMFERENCE, EARTH_CIRCUMFERENCE_DEGREES, EARTH_RADIUS, wsg84_to_webmercator};
+use geozero::ToMvt;
+use geozero::mvt::tile::Layer;
 
+const MAX_EXTENT: u32 = 4096;
 pub enum GeoJsonCli {}
 
 type GeoJsonSourceResult<T> = Result<T, GeoJsonSourceError>;
 pub enum GeoJsonSourceError {
-    UnsopportedCharsInFilepath,
+    UnsupportedCharsInFilepath,
 }
 
 pub struct GeoJsonTilesSource {
@@ -18,15 +23,11 @@ pub struct GeoJsonTilesSource {
 }
 
 impl GeoJsonTilesSource {
-    pub fn new<P: AsRef<Path>>(
-        filepath: String,
-        filename: String,
-        buffer_size: usize,
-    ) -> GeoJsonSourceResult<Self> {
+    pub fn new<P: AsRef<Path>>(filepath: P, buffer_size: usize) -> GeoJsonSourceResult<Self> {
         let path = filepath.as_ref();
         Ok(Self {
             filepath: path
-                .as_str()
+                .to_str()
                 .ok_or_else(|| GeoJsonSourceError::UnsupportedCharsInFilepath(path.to_path_buf()))?
                 .to_string(),
             filename: path
@@ -55,6 +56,18 @@ impl GeoJsonTilesSource {
     #[must_use]
     pub fn buffer_size(&self) -> usize {
         &self.buffer_size
+    }
+
+    pub async fn to_mvt_source(&self, geometry: Geometry) -> GeoJsonSourceResult<MvtBuilder> {
+        let mut mvt = MvtBuilder::new();
+        match geometry.value.type_name() {
+            "Point" => {
+                if let Value::Point(coords) = geometry.value {
+                    let mvt_base = geometry.value.to_mvt(MAX_EXTENT, coords[0], coords[1]);
+                }
+            }
+        }
+        Ok(mvt)
     }
 }
 
