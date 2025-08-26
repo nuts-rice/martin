@@ -1,21 +1,21 @@
 use geozero::mvt;
-use mvt::tile::Feature;
+use std::collections::HashMap;
 
 pub type MvtTileData = Vec<u8>;
 
 pub struct MvtLayer {
     pub name: String,
-    pub features: Vec<Feature>,
+    pub tiles: Vec<Feature>,
 }
 
 pub struct MvtBuilder {
-    tile: mvt::Tile,
+    tiles: HashMap<u64, mvt::Tile>,
 }
 
 impl MvtBuilder {
     pub fn new() -> Self {
         Self {
-            tile: mvt::Tile::default(),
+            tiles: HashMap::new(),
         }
     }
 }

@@ -1,19 +1,20 @@
-use geojson::{Geometry, Value};
+use geojson::{GeoJson, Geometry, Value};
 use std::f64::consts::PI;
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::mvt::MvtBuilder;
-use crate::{EARTH_CIRCUMFERENCE, EARTH_CIRCUMFERENCE_DEGREES, EARTH_RADIUS, wsg84_to_webmercator};
-use geozero::ToMvt;
+use crate::{EARTH_CIRCUMFERENCE, EARTH_CIRCUMFERENCE_DEGREES, EARTH_RADIUS};
+use geojson_vt_rs::{GeoJSONVT, Options, TileOptions, geojson_to_tile};
 use geozero::mvt::tile::Layer;
+use geozero::{ToMvt, mvt::Tile};
 
-const MAX_EXTENT: u32 = 4096;
+const MAX_EXTENT: u16 = 4096;
 pub enum GeoJsonCli {}
 
 type GeoJsonSourceResult<T> = Result<T, GeoJsonSourceError>;
 pub enum GeoJsonSourceError {
-    UnsupportedCharsInFilepath,
+    UnsupportedCharsInFilepath(PathBuf),
 }
 
 pub struct GeoJsonTilesSource {
@@ -55,23 +56,35 @@ impl GeoJsonTilesSource {
 
     #[must_use]
     pub fn buffer_size(&self) -> usize {
-        &self.buffer_size
+        self.buffer_size
     }
 
-    pub async fn to_mvt_source(&self, geometry: Geometry) -> GeoJsonSourceResult<MvtBuilder> {
+    pub async fn to_mvt_source(&self, geometry: GeoJson) -> GeoJsonSourceResult<GeoJSONVT> {
         let mut mvt = MvtBuilder::new();
-        match geometry.value.type_name() {
-            "Point" => {
-                if let Value::Point(coords) = geometry.value {
-                    let mvt_base = geometry.value.to_mvt(MAX_EXTENT, coords[0], coords[1]);
-                }
-            }
-        }
-        Ok(mvt)
+        let options = Options {
+            max_zoom: 18,
+            index_max_zoom: 5,
+            index_max_points: 100000,
+            generate_id: false,
+            tile: TileOptions {
+                tolerance: 3.,
+                extent: MAX_EXTENT,
+                buffer: 64,
+                line_metrics: false,
+            },
+        };
+        let mvt_base = GeoJSONVT::from_geojson(&geometry, &options);
+
+        Ok(mvt_base)
+    }
+
+    fn fix_tile(&self, tile: &Tile) -> Tile {
+        unimplemented!()
     }
 }
 
 //Only Point now
+/*
 pub fn geom_to_webmercator(geom: &Value, extent: u32) -> (f64, f64) {
     let x = match geom {
         Value::Point(coords) => coords[0],
@@ -83,5 +96,15 @@ pub fn geom_to_webmercator(geom: &Value, extent: u32) -> (f64, f64) {
     };
     wsg84_to_webmercator(x, y);
 }
+*/
 
-pub fn fix_geom(geom: &Geometry<f64>) -> Geometry<f64> {}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_roundtrip() {
+        let geojson_str = r#"{
+        "type": "MultiPolygon", "coordinates": [[[[40,40],[20,45],[45,30],[40,40]]],[[[35,10],[45,45],[15,40],[10,20],[35,10]],[[20,30],[35,35],[30,20],[20,30]]]]}"#;
+        let geojson: GeoJson = geojson_str.parse().unwrap();
+    }
+}

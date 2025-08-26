@@ -19,7 +19,10 @@ homepage.workspace = true
 brotli.workspace = true
 flate2.workspace = true
 geo = "0.30.0"
+geo-types = "0.7.17"
 geojson = "0.24.2"
+geojson-vt-rs = "0.1.1"
+geozero = { version = "0.14.0", features = ["with-mvt"] }
 mvt = "0.10.3"
 proj = "0.30.0"
 serde.workspace = true
