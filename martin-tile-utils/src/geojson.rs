@@ -7,12 +7,14 @@ use crate::mvt::MvtBuilder;
 use crate::{EARTH_CIRCUMFERENCE, EARTH_CIRCUMFERENCE_DEGREES, EARTH_RADIUS};
 use geojson_vt_rs::{GeoJSONVT, Options, TileOptions, geojson_to_tile};
 use geozero::mvt::tile::Layer;
-use geozero::{ToMvt, mvt::Tile};
+use geozero::{ToJson, ToMvt, mvt::Tile};
 
 const MAX_EXTENT: u16 = 4096;
 pub enum GeoJsonCli {}
 
 type GeoJsonSourceResult<T> = Result<T, GeoJsonSourceError>;
+
+#[derive(Debug)]
 pub enum GeoJsonSourceError {
     UnsupportedCharsInFilepath(PathBuf),
 }
@@ -102,9 +104,17 @@ pub fn geom_to_webmercator(geom: &Value, extent: u32) -> (f64, f64) {
 mod tests {
     use super::*;
 
-    fn test_roundtrip() {
+    async fn test_roundtrip() {
+        let expected_geo: geo_types::Geometry<f64> =
+            geo_types::Point::new(960000.0, 6002729.0).into();
+        let expected_mvt = expected_geo
+            .to_mvt(256, 958826.08, 5987771.04, 978393.96, 6007338.92)
+            .unwrap();
+        let expected_geojson = expected_mvt.to_json().unwrap();
         let geojson_str = r#"{
-        "type": "MultiPolygon", "coordinates": [[[[40,40],[20,45],[45,30],[40,40]]],[[[35,10],[45,45],[15,40],[10,20],[35,10]],[[20,30],[35,35],[30,20],[20,30]]]]}"#;
+        "type": "Point", "coordinates": [15, 61]}"#;
         let geojson: GeoJson = geojson_str.parse().unwrap();
+        let gjt = GeoJsonTilesSource::new("test.geojson", 256).unwrap();
+        let actual_mvt = gjt.to_mvt_source(geojson).await.unwrap();
     }
 }
