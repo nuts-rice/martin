@@ -3,10 +3,6 @@ use std::collections::HashMap;
 
 pub type MvtTileData = Vec<u8>;
 
-pub struct MvtLayer {
-    pub name: String,
-    pub tiles: Vec<Feature>,
-}
 
 pub struct MvtBuilder {
     tiles: HashMap<u64, mvt::Tile>,

@@ -17,6 +17,7 @@ homepage.workspace = true
 
 [dependencies]
 brotli.workspace = true
+dashmap.workspace = true
 flate2.workspace = true
 geo = "0.30.0"
 geo-types = "0.7.17"
