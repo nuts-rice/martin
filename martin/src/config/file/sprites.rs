@@ -4,13 +4,12 @@ use log::warn;
 use martin_core::sprites::SpriteSources;
 use serde::{Deserialize, Serialize};
 
-use crate::config::file::{
-    ConfigExtras, ConfigFileResult, FileConfigEnum, UnrecognizedKeys, UnrecognizedValues,
-};
+use crate::MartinResult;
+use crate::config::file::{ConfigExtras, FileConfigEnum, UnrecognizedKeys, UnrecognizedValues};
 
 pub type SpriteConfig = FileConfigEnum<InnerSpriteConfig>;
 impl SpriteConfig {
-    pub fn resolve(&mut self) -> ConfigFileResult<SpriteSources> {
+    pub fn resolve(&mut self) -> MartinResult<SpriteSources> {
         let Some(cfg) = self.extract_file_config(None)? else {
             return Ok(SpriteSources::default());
         };
@@ -22,7 +21,7 @@ impl SpriteConfig {
         if let Some(sources) = cfg.sources {
             for (id, source) in sources {
                 configs.insert(id.clone(), source.clone());
-                results.add_source(id, source.abs_path()?);
+                results.add_source(id, source.abs_path()?)?;
             }
         }
 
@@ -35,7 +34,7 @@ impl SpriteConfig {
                 continue;
             };
             directories.push(path.clone());
-            results.add_source(name.to_string_lossy().to_string(), path);
+            results.add_source(name.to_string_lossy().to_string(), path)?;
         }
 
         *self = FileConfigEnum::new_extended(directories, configs, cfg.custom);

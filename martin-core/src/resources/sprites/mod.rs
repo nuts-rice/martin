@@ -11,7 +11,7 @@
 //! use std::path::PathBuf;
 //!
 //! let mut sources = SpriteSources::default();
-//! sources.add_source("icons".to_string(), PathBuf::from("/path/to/svg/directory"));
+//! sources.add_source("icons".to_string(), PathBuf::from("/path/to/svg/directory")).unwrap();
 //! let spritesheet = sources.get_sprites("icons@2x", false).await.unwrap();
 //! # }
 //! ```
@@ -98,122 +98,6 @@ impl SpriteSources {
         }
 
         Ok(())
-    }
-
-    /// Validates a sprite source directory to ensure it contains valid SVG files.
-    /// Checks include:
-    /// - Directory existence and accessibility
-    /// - Presence of SVG files
-    /// - Basic SVG format validation
-    pub async fn validate_source_directory(&self, path: &PathBuf) -> Result<(), SpriteError> {
-        let disp_path = path.display();
-        let on_err = |e| SpriteError::IoError(e, path.clone());
-
-        // Check if path exists and get metadata
-        let metadata = tokio::fs::metadata(path).await.map_err(on_err)?;
-
-        if !metadata.is_dir() {
-            return Err(SpriteError::NotADirectory(path.clone()));
-        }
-
-        let (total_files, svg_count, sprite_output_files) =
-            Self::scan_directory_files(path).await?;
-
-        let mut entries = tokio::fs::read_dir(path).await.map_err(on_err)?;
-        while let Some(entry) = entries.next_entry().await.map_err(on_err)? {
-            let entry_path = entry.path();
-            if entry_path.is_file() {
-                if let Some(extension) = entry_path.extension() {
-                    if extension.to_string_lossy().to_lowercase() == "svg" {
-                        self.validate_svg_file(&entry_path).await?;
-                    }
-                }
-            }
-        }
-
-        if total_files == 0 {
-            return Err(SpriteError::EmptyDirectory(path.clone()));
-        }
-
-        if svg_count == 0 && sprite_output_files.is_empty() {
-            return Err(SpriteError::DirectoryValidationFailed(
-                path.clone(),
-                "Directory contains no SVG files".to_string(),
-            ));
-        }
-
-        info!(
-            "Validated sprite directory {disp_path}: found {svg_count} SVG files out of {total_files} total files"
-        );
-        Ok(())
-    }
-
-    /// Validates an individual SVG file for format.
-    async fn validate_svg_file(&self, path: &PathBuf) -> Result<(), SpriteError> {
-        let on_err = |e| SpriteError::IoError(e, path.clone());
-
-        let content = tokio::fs::read_to_string(path).await.map_err(on_err)?;
-        let content = content.trim();
-
-        if content.is_empty() {
-            return Err(SpriteError::EmptyFile(path.clone()));
-        }
-
-        if !content.starts_with("<?xml") && !content.starts_with("<svg") {
-            return Err(SpriteError::InvalidSvgFormat(
-                path.clone(),
-                "Missing SVG declaration".to_string(),
-            ));
-        }
-
-        // Check if it contains an SVG tag
-        if !content.contains("<svg") {
-            return Err(SpriteError::InvalidSvgFormat(
-                path.clone(),
-                "No SVG element found".to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    /// Scans a directory and returns file counts.
-    async fn scan_directory_files(
-        path: &PathBuf,
-    ) -> Result<(usize, usize, Vec<String>), SpriteError> {
-        let on_err = |e| SpriteError::IoError(e, path.clone());
-        let mut entries = tokio::fs::read_dir(path).await.map_err(on_err)?;
-        let mut total_files = 0;
-        let mut svg_count = 0;
-        let mut sprite_output_files = Vec::new();
-
-        while let Some(entry) = entries.next_entry().await.map_err(on_err)? {
-            let entry_path = entry.path();
-            if entry_path.is_file() {
-                total_files += 1;
-                if let Some(extension) = entry_path.extension() {
-                    let ext = extension.to_string_lossy().to_lowercase();
-                    if ext == "svg" {
-                        svg_count += 1;
-                    } else if ext == "png" || ext == "json" {
-                        let filename = entry_path
-                            .file_stem()
-                            .map(|s| s.to_string_lossy().to_string())
-                            .unwrap_or_default();
-                        if filename.contains("sprite") || filename.contains("@2x") {
-                            sprite_output_files.push(
-                                entry_path
-                                    .file_name()
-                                    .map(|s| s.to_string_lossy().to_string())
-                                    .unwrap_or_default(),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok((total_files, svg_count, sprite_output_files))
     }
 }
 
@@ -369,52 +253,21 @@ mod tests {
         let png = sprites.encode_png().unwrap();
         insta::assert_binary_snapshot!(&format!("{filename}.png"), png);
     }
-}
 
-#[tokio::test]
-async fn test_directory_not_found() {
-    let mut sprites = SpriteSources::default();
-    let result = sprites.add_source("nothere".to_string(), PathBuf::from("/path/to/nowhere"));
-    assert!(matches!(result, Err(SpriteError::DirectoryNotFound(..))));
-}
+    #[tokio::test]
+    async fn test_directory_not_found() {
+        let mut sprites = SpriteSources::default();
+        let result = sprites.add_source("nothere".to_string(), PathBuf::from("/path/to/nowhere"));
+        assert!(matches!(result, Err(SpriteError::DirectoryNotFound(..))));
+    }
 
-#[tokio::test]
-async fn test_not_a_directory() {
-    let mut sprites = SpriteSources::default();
-    let result = sprites.add_source(
-        "notadir".to_string(),
-        PathBuf::from("../tests/fixtures/sprites/notsrc2/ferris.png"),
-    );
-    assert!(matches!(result, Err(SpriteError::NotADirectory(..))));
-}
-
-#[tokio::test]
-async fn test_empty_directory() {
-    let sprites = SpriteSources::default();
-    let result = sprites
-        .validate_source_directory(&PathBuf::from("../tests/fixtures/sprites/notsrc1"))
-        .await;
-    assert!(matches!(result, Err(SpriteError::EmptyDirectory(..))));
-}
-
-#[tokio::test]
-async fn test_sprite_source_scan() {
-    use crate::sprites::SpriteSources;
-    let result =
-        SpriteSources::scan_directory_files(&PathBuf::from("../tests/fixtures/sprites/notsrc2"))
-            .await;
-    assert_eq!(result.as_ref().unwrap().0, 2);
-    assert_eq!(result.unwrap().1, 0);
-}
-
-#[tokio::test]
-async fn test_empty_file() {
-    use crate::sprites::SpriteSources;
-    let sprites = SpriteSources::default();
-    let result = SpriteSources::validate_svg_file(
-        &sprites,
-        &PathBuf::from("../tests/fixtures/sprites/notsrc2/notasprite.txt"),
-    )
-    .await;
-    assert!(matches!(result, Err(SpriteError::EmptyFile(..))));
+    #[tokio::test]
+    async fn test_not_a_directory() {
+        let mut sprites = SpriteSources::default();
+        let result = sprites.add_source(
+            "notadir".to_string(),
+            PathBuf::from("../tests/fixtures/sprites/notsrc2/ferris.png"),
+        );
+        assert!(matches!(result, Err(SpriteError::NotADirectory(..))));
+    }
 }
